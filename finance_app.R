@@ -129,7 +129,7 @@ ui <- dashboardPage(
                                     girafeOutput("foreplot")),
                                 box(width=12,solidheader=F,title="Background info",collapsible=T,collapsed=T,
                                     HTML(
-                                      "<p><strong>Important:</strong> New forecast predictions are being estimated
+                                      "<p><strong>Important:</strong> New forecasts are being estimated
                                       every time this dashboard is loaded and based on the most recent DJIA data from
                                       Yahoo Finance. They can therefore vary over time.</p>
                                       <p>The two forecasting algorithms available here were selected out of a broader range of
@@ -163,7 +163,8 @@ ui <- dashboardPage(
                                       differencing performed overall best with mean absolute prediction errors (MEA) of
                                       1834.55 and 1731.74, respectively, for the pre-COVID era and MEAs of 1379.86 and
                                       1631.99, respectively, for the post-COVID era.</p>
-                                      <p>Replication code for the analysis can be found <a>here</a>.</p>
+                                      <p>Replication code for the analysis can be found <a 
+                                      href='https://github.com/cknotz/finance_forecast' target='_blank'>here</a>.</p>
                                       "
                                     ))
                               ))
