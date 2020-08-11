@@ -72,7 +72,7 @@ ui <- dashboardPage(
                                       and (statistically) informed guesses - but it can by no means predict future
                                       stock market developments. If you base your investment decisions on any of the
                                       information privided here, you do so at <i>your own risk</i>! I reject all 
-                                      liability for any damages you may have incurred while or after using this 
+                                      liability for any damages you may incur while or after using this 
                                       dashboard.</p>"
                                       ))
                               )),
