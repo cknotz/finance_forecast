@@ -11,3 +11,6 @@ The dashboard is publicly available at: https://cknotz.shinyapps.io/finance_fore
 The `finance_app.R` file contains `R` code to produce the dashboard itself.
 
 The `finance_model-eval.R` file contains `R` code to reproduce the evaluation of different forecasting algorithm.
+
+### IMPORTANT
+If you use the dashboard, do read the disclaimer!

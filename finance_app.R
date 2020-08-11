@@ -62,8 +62,18 @@ ui <- dashboardPage(
                                       <a href='https://medium.com/concoda/how-to-predict-major-market-shifts-99419ae1d23c'
                                        target='_blank'>post</a> and the <i>Nature</i> article by Preis et al. 
                                       (<a href='https://doi.org/10.1038/srep01684' target='_blank'>2013</a>).</p>
+                                      
                                       <p>This is version 1.0. Future versions will include prediction ranges for 
-                                      the neural network forecasts and customizable forecast horizons.</p>"
+                                      the neural network forecasts and customizable forecast horizons.</p>
+                                      
+                                      <p><strong>IMPORTANT DISCLAIMER:</strong> Forecasts are not promises, and
+                                      the past performance of a stock or index does not predict its future
+                                      performance. This dashboard is designed to provide contextual information
+                                      and (statistically) informed guesses - but it can by no means predict future
+                                      stock market developments. If you base your investment decisions on any of the
+                                      information privided here, you do so at <i>your own risk</i>! I reject all 
+                                      liability for any damages you may have incurred while or after using this 
+                                      dashboard.</p>"
                                       ))
                               )),
                       tabItem(tabName = "indicators",
@@ -122,11 +132,9 @@ ui <- dashboardPage(
                                            sliderInput(inputId = "daterange", label = "Select start date",
                                                        min = as.Date("1985-01-01","%Y-%m-%d"),
                                                        max = as.Date(as.character(as.Date(Sys.Date()-365)),"%Y-%m-%d"),
-                                                       value = as.Date(as.character(as.Date(Sys.Date()-365)),"%Y-%m-%d"),
+                                                       value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
                                                        timeFormat="%b %Y")
                                            )),
-                                box(width = 12,collapsible = F,solidHeader = T,
-                                    girafeOutput("foreplot")),
                                 box(width=12,solidheader=F,title="Background info",collapsible=T,collapsed=T,
                                     HTML(
                                       "<p><strong>Important:</strong> New forecasts are being estimated
@@ -166,7 +174,9 @@ ui <- dashboardPage(
                                       <p>Replication code for the analysis can be found <a 
                                       href='https://github.com/cknotz/finance_forecast' target='_blank'>here</a>.</p>
                                       "
-                                    ))
+                                    )),
+                                box(width = 12,collapsible = F,solidHeader = T,
+                                    girafeOutput("foreplot")),
                               ))
                   ))
 )
