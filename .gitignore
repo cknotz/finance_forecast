@@ -5,3 +5,5 @@
 finance_forecast.Rproj
 rsconnect/
 alphavant_api.R
+metastore_db
+derby.log
