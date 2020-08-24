@@ -21,6 +21,137 @@ library(shiny)
     library(shinyWidgets)
     library(shinyjs)
 
+# Alpha Vantage functions
+#########################
+
+# 1. Store key in 
+store_key <- function(){
+    key <- readline(prompt = "Please enter your API key: ")
+    Sys.setenv(api_key = key)
+    message(paste0("Thanks! I've stored this: '",key,"'."))
+}
+
+# 2. retrieve key, checking whether file is there or not)
+check_key <- function(){
+   if(identical(Sys.getenv("api_key"),"")){
+       message("Oh, looks like your key is not stored yet!")
+       store_key()}else{
+           message(paste0("I've stored this: '",Sys.getenv("api_key"),"'. If you want to change this, please run store_key()."))
+       }
+    # if nothing, then something is stored
+}
+
+# 3. Data download function
+downloadDailyAV <- function(symbol){
+
+# Check if argument entered correctly
+if(!is.character(symbol)){
+    stop("Please enter the ticker symbol as a character string, i.e. within quotation marks.",
+         call. = F)
+}
+
+#  Check if key stored, if not prompt enter request
+if(identical(Sys.getenv("api_key"),"")){
+       message("Oh, looks like your key is not stored yet!")
+       store_key()
+       message("Key is stored, great. Proceeding to download...")}else{
+           message("Key is stored, great. Proceeding to download...")
+       }
+    
+# Set up API request
+base <- "https://www.alphavantage.co/query?"
+type <- "TIME_SERIES_DAILY"
+datatype <- "json"
+size <- "full"
+
+call <- paste0(base,
+       "function=",type,
+       "&symbol=",symbol,
+       "&outputsize=",size,
+       "&datatype=",datatype,
+       "&apikey=",noquote(Sys.getenv("api_key")))
+
+# Fetch data - JSON
+data <- GET(call) %>% 
+    httr::content(as = "text",encoding = "UTF-8") %>% 
+    fromJSON(flatten = T)
+    
+# Store meta info
+info <- data[[1]][[1]]
+tz <- data[[1]][[5]]
+
+# Tidy
+vals <- as.data.frame(unlist(data[[2]]))
+
+# Tidy
+vals$id <- rownames(vals)
+data <- separate(data = vals,
+         col = id,
+         into = c("date","var"),
+         sep = ".[[:digit:]].[[:blank:]]",
+         remove = T
+         )
+data$value <- as.double(data[,1])
+data$date <- as.Date(data$date)
+data[,1] <- NULL
+
+# Reshape to wider
+data <- data %>% 
+    pivot_wider(
+        names_from = var,
+        values_from = value
+    )
+
+#Addign meta info
+data$symbol <- symbol
+data$tz <- tz
+
+rm(vals) # reduce clutter
+
+# Send confirmation
+if(is.data.frame(data) & length(data)>0){
+    message(paste0("...finished downloading. Getting additional information on ticker symbol..."))
+}
+
+# Look up description of symbol
+
+# Set up new API request
+base <- "https://www.alphavantage.co/query?"
+type <- "SYMBOL_SEARCH"
+datatype <- "json"
+
+call <- paste0(base,
+       "function=",type,
+       "&keywords=",symbol,
+       "&datatype=",datatype,
+       "&apikey=",noquote(Sys.getenv("api_key")))
+
+# Fetch data - JSON
+info <- GET(call) %>% 
+    httr::content(as = "text",encoding = "UTF-8") %>% 
+    fromJSON(flatten = T)
+    
+# Extract data
+if(length(info[[1]])>0){
+ticker <- info[[1]][[1]][1] # ticker to check
+name <- info[[1]][[2]][1] # name
+type <- info[[1]][[3]][1] # type (additional check)
+
+if(identical(ticker,data$symbol[1])){
+data$name <- name
+data$type <- type
+
+message("All done.")
+}else{
+      message("It seems the API found information for a different ticker symbol. This should not affect the data as such, but please double-check that you specified the correct symbol.") 
+}
+}else{
+   message("Looks like the API could not find additional info on your symbol. This should not affect the data as such, but please double-check if the symbol contained in the data really is what you're looking for.") 
+}
+
+return(data)
+}
+
 
 
 ui <- dashboardPage(
@@ -28,8 +159,12 @@ ui <- dashboardPage(
     dashboardSidebar(
         sidebarMenu(
       menuItem("Introduction", tabName = "intro", icon = icon("info", lib = "font-awesome")),
-      menuItem("Key short-term indicators", tabName = "indicators", icon = icon("dashboard")),
-      menuItem("Forecasting (^DJIA)", tabName = "forecast", icon = icon("chart-line", lib = "font-awesome"))
+      menuItem("Sentiment indicators", tabName = "indicators", icon = icon("dashboard")),
+      menuItem("Stock prices", tabName = "data", icon = icon("chart-line", lib = "font-awesome")),
+      HTML("<br><br>"),
+      actionButton(inputId = "fetch_short",
+                   label="Download data",
+                   icon("arrow-circle-down",lib="font-awesome"))
     )
     ),
     dashboardBody(shinyjs::useShinyjs(),
@@ -46,34 +181,25 @@ ui <- dashboardPage(
                               fluidRow(
                                 box(width = 12, solidHeader = F,collapsible = F,title = "About this dashboard",
                                     HTML(
-                                      "<p>This data dashboard provides up-to-date information about
-                                      current stock market developments and forecasts of
-                                      the Dow Jones Industrial Average (^DJIA), a leading stock market index and
-                                      key indicator of worldwide stock market trends.</p>
-                                      
-                                      <p>The forecasts are based on historical Dow Jones index values from 
-                                      January 1st, 1985 through today and estimated using classical forecasting
-                                      techniques as well as neural networks,
-                                      building on Hyndman & Athanasopoulos (<a href='https://otexts.com/fpp2/' 
-                                      target='_blank'>2018</a>) and Kourentzes (<a 
-                                      href='https://cran.r-project.org/web/packages/nnfor/index.html' target='_blank'>2019</a>).</p>
+                                      "<p>This dashboard features data on current stock market developments, including
+                                      a selection of short-term indicators of investor sentiment and prices of
+                                      selected stocks and ETFs.</p>
                                       
                                       <p>The short-term indicators are selected based (roughly) on this helpful Medium 
                                       <a href='https://medium.com/concoda/how-to-predict-major-market-shifts-99419ae1d23c'
                                        target='_blank'>post</a> and the <i>Nature</i> article by Preis et al. 
-                                      (<a href='https://doi.org/10.1038/srep01684' target='_blank'>2013</a>).</p>
+                                      (<a href='https://doi.org/10.1038/srep01684' target='_blank'>2013</a>). The data
+                                      on short-term indicators are retrieved from Yahoo Finance and GoogleTrends.</p>
                                       
-                                      <p>This is version 1.0. Future versions will include prediction ranges for 
-                                      the neural network forecasts and customizable forecast horizons.</p>
+                                      <p>The stock price data are retrieved through the <a target='_blank'
+                                      href='https://www.alphavantage.co/'>Alpha Vantage API</a>.</p>
                                       
-                                      <p><strong>IMPORTANT DISCLAIMER:</strong> Forecasts are not promises, and
-                                      the past performance of a stock or index does not predict its future
-                                      performance. This dashboard is designed to provide contextual information
-                                      and (statistically) informed guesses - but it can by no means predict future
-                                      stock market developments. If you base your investment decisions on any of the
-                                      information privided here, you do so at <i>your own risk</i>! I reject all 
-                                      liability for any damages you may incur while or after using this 
-                                      dashboard.</p>"
+                                      <p>The forecast function for the stock market prices assumes the data follow
+                                      a simple random walk with drift process. Many (but not all!) economists think
+                                      this is a reasonable approximation of how stock market prices evolve.</p>
+                                      
+                                      <p>This is version 1.0. Future versions will feature an option to dynamically search and
+                                      download data for all stocks Alpha Vantage has data for.</p>"
                                       ))
                               )),
                       tabItem(tabName = "indicators",
@@ -83,20 +209,17 @@ ui <- dashboardPage(
                                       "<p>The interactive graphs below show the recent (last 90 days) development of some selected indicators of
                                         investor sentiment. These include:</p>
                                       <ul>
-                                        <li>High-yield or 'junk' bonds (SPDR Blmbrg Barclays
-                                        High Yield Bd ETF, JNK). Rising prices indicate investors are more willing to 
+                                        <li>High-yield or 'junk' bond (SPDR Blmbrg Barclays
+                                        High Yield Bd ETF, JNK) prices. Rising prices indicate investors are more willing to 
                                         take high risks.</li>
                                         <li>Gold Futures (Mini Gold Futures, YG=F). Rising prices indicate investors 
                                         seek low-risk assets.</li>
-                                        <li>GoogleTrends query volumes for 'debt'. Increased numbers of searches for this term are associated with 
+                                        <li>Worldwide GoogleTrends query volumes for 'debt'. Increased numbers of searches for this term are associated with 
                                         subsequent drops in stock market prices (see <a href='https://doi.org/10.1038/srep01684' 
                                         target='_blank'>Preis et al., 2013</a>).</li>
                                         <li>U.S. Treasury Bond Futures (ZB=F). Rising prices indicate investors seek
                                         low-risk assets.</li>
-                                      </ul>"),
-                                      actionButton(inputId = "fetch_short",
-                                                   label="Get data",
-                                                   icon("arrow-circle-down",lib="font-awesome"))
+                                      </ul>")
                                       )),
                               fluidRow(
                                   column(width = 6,
@@ -112,73 +235,27 @@ ui <- dashboardPage(
                                              girafeOutput("zb")))
                               )
                               ),
-                      tabItem(tabName = "forecast",
+                      tabItem(tabName = "data",
                               fluidRow(
-                                box(width=12,solidheader=T,collapsible=F,title = "Dow Jones Forecast",
-                                    column(width = 4,
-                                           actionButton(inputId = "forecast", label = "Get data & estimate forecasts",
-                                                 icon("arrow-circle-down",lib="font-awesome")),
-                                           br(),
-                                           br(),
-                                           br(),
-                                           br(),
-                                           materialSwitch(inputId = "showfit", label = "Show fitted values",
-                                                          status = "warning")),
-                                    column(width = 8,
-                                           pickerInput(inputId = "model",
-                                                       choices = list("Estimator" = c("Neural network" = "net",
-                                                                                      "ARIMA" = "arima")),
-                                                       multiple = F),
-                                           sliderInput(inputId = "daterange", label = "Select start date",
-                                                       min = as.Date("1985-01-01","%Y-%m-%d"),
+                                box(width=12,solidHeader = T,collapsible = F, title = " ",
+                                    column(width=8,
+                                           pickerInput(inputId = "picker",
+                                                       choices = c("Alphabet Cl. A (GOOGL)" = "GOOGL",
+                                                                   "Amazon (AMZN)" = "AMZN",
+                                                                   "Apple (AAPL)" = "AAPL",
+                                                                   "Microsoft (MSFT" = "MSFT"))),
+                                    column(width=4, align = "center",
+                                           actionButton(inputId = "forecast",label = "Forecast",
+                                                 icon("arrow-circle-right",lib="font-awesome"))),
+                                    column(width=12,
+                                           sliderInput(inputId = "daterange", label = "Adjust start date",
+                                                       min = as.Date("2015-01-01","%Y-%m-%d"),
                                                        max = as.Date(as.character(as.Date(Sys.Date()-365)),"%Y-%m-%d"),
                                                        value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
-                                                       timeFormat="%b %Y")
-                                           )),
-                                box(width=12,solidheader=F,title="Background info",collapsible=T,collapsed=T,
-                                    HTML(
-                                      "<p><strong>Important:</strong> New forecasts are being estimated
-                                      every time this dashboard is loaded and based on the most recent DJIA data from
-                                      Yahoo Finance. They can therefore vary over time.</p>
-                                      <p>The two forecasting algorithms available here were selected out of a broader range of
-                                      algorithms based on their performance in the following two tests:</p>
-                                      <ol>
-                                      <li>Pre-COVID predictive performance: Their predictive performance of real Dow Jones index values in the 
-                                      period between July and December 2019, after being trained on Dow Jones data from
-                                      January 1985 to June 2019;</li>
-                                      <li>Post-COVID predictive performance: Their predictive performance of real
-                                      Dow Jones index values in the period between June and August 2020 (after the 
-                                      immediate post-lockdown shock), after being trained on Dow Jones data from
-                                      January 1985 to May 2020.</li>
-                                      </ol>
-                                      <p>The following algorithms were under consideration:</p>
-                                      <ul>
-                                      <li>A flexible ARIMA estimator (the Hyndman-Khandakar algorithm, as
-                                      implemented in the <i>auto.arima()</i> function in the
-                                      <i>forecast</i>-package), which automatically selects an optimal
-                                      ARIMA specification.</li>
-                                      <li>Forecasts based on multiple seasonal decomposition (<i>mstl()</i>)
-                                      and a random-walk with drift estimator.</li>
-                                      <li>Exponential Smoothing State Space models selected using the 
-                                      <i>ets()</i> algorithm in the <i>forecast</i>-package.</li>
-                                      <li>Feed-forward neural network autoregression (NNAR) models, 
-                                      autofitted using the <i>nnar()</i> algorithm.</li>
-                                      <li>Feed-forward multi-layer perceptron (MLP) neural networks, autofitted
-                                      using the <i>mlp()</i>-algorithm developed by Kourentzes, once with 
-                                      differencing and once without.</li>
-                                      </ul>
-                                      <p>The flexible ARIMA estimator as well as the MLP neural network model without
-                                      differencing performed overall best with mean absolute prediction errors (MEA) of
-                                      1834.55 and 1731.74, respectively, for the pre-COVID era and MEAs of 1379.86 and
-                                      1631.99, respectively, for the post-COVID era.</p>
-                                      <p>Replication code for the analysis can be found <a 
-                                      href='https://github.com/cknotz/finance_forecast' target='_blank'>here</a>.</p>
-                                      "
-                                    )),
-                                box(width = 12,collapsible = F,solidHeader = T,
-                                    girafeOutput("foreplot")),
-                              ))
-                  ))
+                                                       timeFormat="%b %Y"))
+                                    )
+                              )
+                              )))
 )
 
 server <- function(input, output, session) {
@@ -370,166 +447,8 @@ server <- function(input, output, session) {
         
     })
     
-    # Download DJIA data & estimate forecasts
-    observeEvent(input$forecast, {
-      disable("forecast")
-      showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
-       
-      # Getting data from Yahoo Finance
-        first.date <- as.Date("1985-01-01")
-            last.date <- Sys.Date()
-            freq.data <- 'monthly'
-        
-        tickers <- c('^DJI') # Junk bonds
-        
-        dowdata <- BatchGetSymbols(tickers = tickers,
-                                 first.date = first.date,
-                                 last.date = last.date,
-                                 freq.data = freq.data,
-                                 cache.folder = file.path(tempdir(),
-                                                          'BGS_Cache') ) # cache in tempdir())
-        dow <- dowdata[["df.tickers"]] %>% 
-            select(price.close,ref.date)
-            rm(dowdata,tickers,first.date,freq.data,last.date)
-            
-        tsdow <- ts(dow$price.close, frequency = 12, start = c(1985,1))
-          rm(dow)
-      removeModal()
-      
-      # Estimations
-      showModal(modalDialog("Running estimations, almost there...", footer=NULL)) 
-      
-      arima <- auto.arima(tsdow, seasonal = T) # ARIMA
-        summary(arima)
-        arima %>% forecast(12) %>% 
-          autoplot()
-        
-        arimafc <- arima %>% forecast(h=12)
-        
-      mlp <- mlp(tsdow, difforder=0)
-        plot(forecast(mlp,h=12))
-        
-        mlpfc <- forecast(mlp, h=12)
-       
-      # Generate date variable  
-      date <- data.frame(date = as.character(seq(from = as.Date("1985-01-01"), 
-                                                 to = as.Date(as.character(Sys.Date()+365)), by = "month")))  
-         
-      # Extracting data - ARIMA model
-      {
-      arima_vals <- data.frame(vals=as.matrix(arimafc$model$x),
-                               date=as.character(as.Date(time(arimafc$model$x))))
-      arima_fitted <- data.frame(fitted=as.matrix(arimafc$fitted),
-                                 date=as.character(as.Date(time(arimafc$fitted))))
-      arima_fore <- data.frame(fore=as.matrix(arimafc$mean),
-                               date=as.character(as.Date(time(arimafc$mean))))
-      arima_upper <- data.frame(upper=as.matrix(arimafc$upper[,2]),
-                                date=as.character(as.Date(time(arimafc$upper[,2]))))
-      arima_lower <- data.frame(lower=as.matrix(arimafc$lower[,2]),
-                                date=as.character(as.Date(time(arimafc$lower[,2]))))
-        
-      arima_data <- merge(date,arima_vals,by.x="date", all.x = T) 
-      arima_data <- merge(arima_data,arima_fore, by="date", all.x = T)
-      arima_data <- merge(arima_data,arima_fitted, by="date", all.x = T)
-      arima_data <- merge(arima_data,arima_lower, by="date", all.x = T)
-      arima_data <- merge(arima_data,arima_upper, by="date", all.x = T)
-     
-      arima_data$date <- as.Date(arima_data$date)
-        rm(arima,arima_fitted,arima_fore,arima_lower,arima_upper,arima_vals,arimafc)
-    }
-      # Extracting data - MLP
-      {
-      mlp_vals <- data.frame(vals=as.matrix(mlpfc$x),
-                             date=as.character(as.Date(time(mlpfc$x))))
-      mlp_fitted <- data.frame(fitted=as.matrix(mlpfc$fitted),
-                               date=as.character(as.Date(time(mlpfc$fitted))))
-      mlp_fore <- data.frame(fore=as.matrix(mlpfc$mean),
-                             date=as.character(as.Date(time(mlpfc$mean))))
-      
-      mlp_data <- merge(date,mlp_vals,by.x = "date", all.x = T)
-      mlp_data <- merge(mlp_data,mlp_fitted, by.x = "date", all.x = T)
-      mlp_data <- merge(mlp_data,mlp_fore, by.x = "date", all.x = T)
-      
-      mlp_data$date <- as.Date(mlp_data$date)
-        rm(mlp,mlpfc,mlp_fitted,mlp_fore,mlp_vals,date)
-      }
-      
-      removeModal()
-      
-      # Graphs
-      output$foreplot <- renderGirafe({
-        if(input$model=="arima"){
-      p <- ggplot(arima_data[arima_data$date>=input$daterange,], aes(x=date)) + #as.Date("2017-08-01")
-        geom_line(aes(y=vals), color="white", alpha=.6) +
-        geom_point_interactive(aes(y=vals,
-                                   tooltip=paste0("Points: ",round(vals,2),"\n",
-                                                  "Date: ", format(as.Date(date), format="%b %Y"))),
-                               fill="white", color="white", alpha=.8) +
-        geom_ribbon(aes(y=fore,ymin=lower,ymax=upper), alpha=.3, fill="white") +
-        geom_line(aes(y=fore), color="#ff9900", size=1.5, alpha=.6) +
-        geom_point_interactive(aes(y=fore,
-                                   tooltip=paste0("Points: ",round(fore,2),"\n",
-                                                  "Date: ", format(as.Date(date), format="%b %Y"))),
-                   fill="#ff9900", color="#ff9900", alpha=.8) +
-          {if(input$showfit==T) geom_line(aes(y=fitted), color="#ff9900")} +
-        xlab("") +
-        ylab("Dow Jones Industrial Average (points)") +
-        theme_minimal(base_family = "sans") +
-          theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
-          theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
-          theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
-          theme(panel.grid.minor.x = element_blank()) +
-          theme(panel.grid.minor.y = element_blank()) +
-          theme(plot.background = element_rect(fill="#343e48", color = "#343e48")) +
-          theme(axis.text = element_text(colour = "#d3d3d3", size = 9)) +
-          theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
-          theme(plot.caption = element_text(color="#d3d3d3")) +
-            labs(caption = "Data source: Yahoo Finance; 95% prediction intervals")
-      
-      girafe(ggobj = p, width_svg = 7, height_svg = 4,
-                  fonts=list(sans = "Arial"),
-                  options = list(
-                      opts_selection(type = "none"),
-                      opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
-                      opts_toolbar(saveaspng = FALSE)))
-        }else{
-          p <- ggplot(data = mlp_data[mlp_data$date>=input$daterange,],aes(x=date)) +
-    geom_line(aes(y=vals), color="white", alpha=.6) +
-    geom_point_interactive(aes(y=vals,
-                                   tooltip=paste0("Points: ",round(vals,2),"\n",
-                                                  "Date: ", format(as.Date(date), format="%b %Y"))),
-                               fill="white", color="white", alpha=.8) +
-    geom_line(aes(y=fore), color="#ff9900", size=1.5, alpha=.6) +
-    geom_point_interactive(aes(y=fore,
-                                   tooltip=paste0("Points: ",round(fore,2),"\n",
-                                                  "Date: ", format(as.Date(date), format="%b %Y"))),
-                   fill="#ff9900", color="#ff9900", alpha=.8) +
-         {if(input$showfit==T) geom_line(aes(y=fitted), color="#ff9900")} +
-    xlab("") +
-        ylab("Dow Jones Industrial Average (points)") +
-        theme_minimal(base_family = "sans") +
-          theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
-          theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
-          theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
-          theme(panel.grid.minor.x = element_blank()) +
-          theme(panel.grid.minor.y = element_blank()) +
-          theme(plot.background = element_rect(fill="#343e48", color = "#343e48")) +
-          theme(axis.text = element_text(colour = "#d3d3d3", size = 9)) +
-          theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
-          theme(plot.caption = element_text(color="#d3d3d3")) +
-            labs(caption = "Data source: Yahoo Finance")
-     
-    girafe(ggobj = p, width_svg = 7, height_svg = 4,
-                  fonts=list(sans = "Arial"),
-                  options = list(
-                      opts_selection(type = "none"),
-                      opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
-                      opts_toolbar(saveaspng = FALSE)))
-        }
-      
-      })
-    })
     
+    # rwf(y, h, drift=TRUE)
 }
 
 shinyApp(ui, server)
