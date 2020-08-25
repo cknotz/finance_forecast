@@ -7,3 +7,4 @@ rsconnect/
 alphavant_api.R
 metastore_db
 derby.log
+www/

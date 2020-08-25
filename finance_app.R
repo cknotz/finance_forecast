@@ -20,138 +20,80 @@ library(shiny)
     library(ggiraph)
     library(shinyWidgets)
     library(shinyjs)
+    library(httr)
+    library(jsonlite)
 
 # Alpha Vantage functions
 #########################
 
-# 1. Store key in 
-store_key <- function(){
-    key <- readline(prompt = "Please enter your API key: ")
-    Sys.setenv(api_key = key)
-    message(paste0("Thanks! I've stored this: '",key,"'."))
-}
-
-# 2. retrieve key, checking whether file is there or not)
-check_key <- function(){
-   if(identical(Sys.getenv("api_key"),"")){
-       message("Oh, looks like your key is not stored yet!")
-       store_key()}else{
-           message(paste0("I've stored this: '",Sys.getenv("api_key"),"'. If you want to change this, please run store_key()."))
-       }
-    # if nothing, then something is stored
-}
-
-# 3. Data download function
-downloadDailyAV <- function(symbol){
-
-# Check if argument entered correctly
-if(!is.character(symbol)){
-    stop("Please enter the ticker symbol as a character string, i.e. within quotation marks.",
-         call. = F)
-}
-
-#  Check if key stored, if not prompt enter request
-if(identical(Sys.getenv("api_key"),"")){
-       message("Oh, looks like your key is not stored yet!")
-       store_key()
-       message("Key is stored, great. Proceeding to download...")}else{
-           message("Key is stored, great. Proceeding to download...")
-       }
-    
 # Set up API request
 base <- "https://www.alphavantage.co/query?"
 type <- "TIME_SERIES_DAILY"
 datatype <- "json"
 size <- "full"
+key <- readLines("www/key.txt") # key.txt is not on GitHub; replace by own key if you want to use this app yourself
 
+# Function to download
+download_av <- function(symbol){
+# Construct call
 call <- paste0(base,
        "function=",type,
        "&symbol=",symbol,
        "&outputsize=",size,
        "&datatype=",datatype,
-       "&apikey=",noquote(Sys.getenv("api_key")))
+       "&apikey=",key)
 
 # Fetch data - JSON
 data <- GET(call) %>% 
     httr::content(as = "text",encoding = "UTF-8") %>% 
     fromJSON(flatten = T)
-    
+return(data)
+}
+
+# Function to check data and transform to tidy data frame
+munging_av <- function(x){
+#Check if call successful  
+if(length(x[[1]])==1) {
+  showNotification(paste0("Something seems to be wrong. Alpha Vantage says: '",x[[1]],"'"),
+                   type = "error")
+  print(paste0("Something's wrong. Alpha Vantage says :",x[[1]]),"'")
+} else { # Munge data
+  
 # Store meta info
-info <- data[[1]][[1]]
-tz <- data[[1]][[5]]
+info <- x[[1]][[1]]
+tz <- x[[1]][[5]]
+symbol <- x[[1]][[2]]
 
 # Tidy
-vals <- as.data.frame(unlist(data[[2]]))
+y <- as.data.frame(unlist(x[[2]]))
 
 # Tidy
-vals$id <- rownames(vals)
-data <- separate(data = vals,
+y$id <- rownames(y)
+x <- separate(data = y,
          col = id,
          into = c("date","var"),
          sep = ".[[:digit:]].[[:blank:]]",
          remove = T
          )
-data$value <- as.double(data[,1])
-data$date <- as.Date(data$date)
-data[,1] <- NULL
+x$value <- as.double(x[,1])
+x$date <- as.Date(x$date)
+x[,1] <- NULL
 
 # Reshape to wider
-data <- data %>% 
+x <- x %>% 
     pivot_wider(
         names_from = var,
         values_from = value
     )
 
 #Addign meta info
-data$symbol <- symbol
-data$tz <- tz
+x$symbol <- symbol
+x$tz <- tz
 
-rm(vals) # reduce clutter
-
-# Send confirmation
-if(is.data.frame(data) & length(data)>0){
-    message(paste0("...finished downloading. Getting additional information on ticker symbol..."))
+return(x)
+message("Data are ready.")
 }
-
-# Look up description of symbol
-
-# Set up new API request
-base <- "https://www.alphavantage.co/query?"
-type <- "SYMBOL_SEARCH"
-datatype <- "json"
-
-call <- paste0(base,
-       "function=",type,
-       "&keywords=",symbol,
-       "&datatype=",datatype,
-       "&apikey=",noquote(Sys.getenv("api_key")))
-
-# Fetch data - JSON
-info <- GET(call) %>% 
-    httr::content(as = "text",encoding = "UTF-8") %>% 
-    fromJSON(flatten = T)
-    
-# Extract data
-if(length(info[[1]])>0){
-ticker <- info[[1]][[1]][1] # ticker to check
-name <- info[[1]][[2]][1] # name
-type <- info[[1]][[3]][1] # type (additional check)
-
-if(identical(ticker,data$symbol[1])){
-data$name <- name
-data$type <- type
-
-message("All done.")
-}else{
-      message("It seems the API found information for a different ticker symbol. This should not affect the data as such, but please double-check that you specified the correct symbol.") 
 }
-}else{
-   message("Looks like the API could not find additional info on your symbol. This should not affect the data as such, but please double-check if the symbol contained in the data really is what you're looking for.") 
-}
-
-return(data)
-}
-
 
 
 ui <- dashboardPage(
@@ -162,9 +104,12 @@ ui <- dashboardPage(
       menuItem("Sentiment indicators", tabName = "indicators", icon = icon("dashboard")),
       menuItem("Stock prices", tabName = "data", icon = icon("chart-line", lib = "font-awesome")),
       HTML("<br><br>"),
-      actionButton(inputId = "fetch_short",
+      #textInput(inputId = "key", placeholder = "Enter your API key" ,label = NULL),
+      #actionButton(inputId = "submit", label = "Store key", width = 200),
+      #HTML("<br>"),
+      actionButton(inputId = "fetch",
                    label="Download data",
-                   icon("arrow-circle-down",lib="font-awesome"))
+                   icon("arrow-circle-down",lib="font-awesome"), width = 200)
     )
     ),
     dashboardBody(shinyjs::useShinyjs(),
@@ -247,6 +192,16 @@ ui <- dashboardPage(
                                     column(width=4, align = "center",
                                            actionButton(inputId = "forecast",label = "Forecast",
                                                  icon("arrow-circle-right",lib="font-awesome"))),
+                                    column(width = 6, align = "center",
+                                           awesomeCheckbox(inputId = "50days",
+                                                           label = "Show 50 day moving-average",
+                                                           value = F,
+                                                           status = "warning")),
+                                    column(width = 6, align = "center",
+                                           awesomeCheckbox(inputId = "200days",
+                                                           label = "Show 200 day moving-average",
+                                                           value = F,
+                                                           status = "warning")),
                                     column(width=12,
                                            sliderInput(inputId = "daterange", label = "Adjust start date",
                                                        min = as.Date("2015-01-01","%Y-%m-%d"),
@@ -260,12 +215,25 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
     tooltip_css <- "background-color:gray;color:white;padding:10px;border-radius:5px;font-family: Lora, sans-serif;font-weight:lighter;font-size:12px;"
-
     # Download & plot short-term indicator data
-    observeEvent(input$fetch_short,{
-        disable("fetch_short")
+    observeEvent(input$fetch,{
+        disable("fetch")
         showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
         
+      # Getting data from Alpha Vantage
+      aapl <- download_av("AAPL")
+      aapl <- munging_av(aapl)
+      
+      googl <- download_av("GOOGL")
+      googl <- munging_av(googl)
+      
+      amzn <- download_av("AMZN")
+      amzn <- munging_av(amzn)
+      
+      msft <- download_av("MSFT")
+      msft <- munging_av(msft)
+      
+      
         # Getting data from GoogleTrends
         gtrends <- gtrends(keyword = c("debt"), time="today 3-m", gprop="web")
             trends <- gtrends$interest_over_time
@@ -314,12 +282,12 @@ server <- function(input, output, session) {
                                                           'BGS_Cache') ) # cache in tempdir())
         zb <- zbdata[["df.tickers"]] %>% 
             select(price.close,ref.date)
-            rm(tickers,zbdata)        
-        
+            rm(tickers,zbdata)
+            
+          
         removeModal()
         
         # Drawing graphs
-        
         output$gtrends <- renderGirafe({
            p <- ggplot(data = trends, aes(x=date,y=debt)) +
                     geom_line(color="white", size=.6, alpha=.6) +
