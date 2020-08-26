@@ -12,10 +12,10 @@ library(shiny)
     library(tidyverse)
     library(BatchGetSymbols)
     library(tidyquant)
-    library(forecast)
+    #library(forecast)
     library(gtrendsR)
-    library(seasonal)
-    library(nnfor)
+   # library(seasonal)
+    #library(nnfor)
     library(gridExtra)
     library(ggiraph)
     library(shinyWidgets)
@@ -97,19 +97,15 @@ message("Data are ready.")
 
 
 ui <- dashboardPage(
-    dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 300),
+    dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 400),
     dashboardSidebar(
-        sidebarMenu(
+        sidebarMenu(id = "sidebar",
       menuItem("Introduction", tabName = "intro", icon = icon("info", lib = "font-awesome")),
       menuItem("Sentiment indicators", tabName = "indicators", icon = icon("dashboard")),
-      menuItem("Stock prices", tabName = "data", icon = icon("chart-line", lib = "font-awesome")),
-      HTML("<br><br>"),
+      menuItem("Stock prices", tabName = "data", icon = icon("chart-line", lib = "font-awesome"))
       #textInput(inputId = "key", placeholder = "Enter your API key" ,label = NULL),
       #actionButton(inputId = "submit", label = "Store key", width = 200),
       #HTML("<br>"),
-      actionButton(inputId = "fetch",
-                   label="Download data",
-                   icon("arrow-circle-down",lib="font-awesome"), width = 200)
     )
     ),
     dashboardBody(shinyjs::useShinyjs(),
@@ -164,7 +160,13 @@ ui <- dashboardPage(
                                         target='_blank'>Preis et al., 2013</a>).</li>
                                         <li>U.S. Treasury Bond Futures (ZB=F). Rising prices indicate investors seek
                                         low-risk assets.</li>
-                                      </ul>")
+                                      </ul>"),
+                                      HTML("<br>"),
+                                        actionBttn(inputId = "fetch_inds",
+                                                   label = "Get data",
+                                                   style = "minimal",
+                                                   color = "warning",
+                                                   size = "sm")
                                       )),
                               fluidRow(
                                   column(width = 6,
@@ -182,24 +184,44 @@ ui <- dashboardPage(
                               ),
                       tabItem(tabName = "data",
                               fluidRow(
+                                box(width = 12,solidHeader = T,collapsible = T,collapsed = F,
+                                    title = "Search for ticker symbol",
+                                    column(12,
+                                    searchInput(
+                                      inputId = "search",
+                                      label = NULL,
+                                      placeholder = "Enter company name...",
+                                      btnSearch = icon("search"), 
+                                      btnReset = icon("remove"), 
+                                      width = "80%"),
+                                    tableOutput(outputId = "search_res"))
+                                    ),
                                 box(width=12,solidHeader = T,collapsible = F, title = " ",
-                                    column(width=8,
-                                           pickerInput(inputId = "picker",
-                                                       choices = c("Alphabet Cl. A (GOOGL)" = "GOOGL",
-                                                                   "Amazon (AMZN)" = "AMZN",
-                                                                   "Apple (AAPL)" = "AAPL",
-                                                                   "Microsoft (MSFT" = "MSFT"))),
-                                    column(width=4, align = "center",
-                                           actionButton(inputId = "forecast",label = "Forecast",
-                                                 icon("arrow-circle-right",lib="font-awesome"))),
+                                    column(12,
+                                           # pickerInput(inputId = "picker",
+                                           #             choices = c("Alphabet Cl. A (GOOGL)" = "GOOGL",
+                                           #                         "Amazon (AMZN)" = "AMZN",
+                                           #                         "Apple (AAPL)" = "AAPL",
+                                           #                         "Microsoft (MSFT" = "MSFT"))),
+                                           searchInput(
+                                              inputId = "getstocks",
+                                              label = NULL,
+                                              placeholder = "Enter ticker symbol...",
+                                              btnSearch = icon("search"), 
+                                              btnReset = icon("remove"), 
+                                              width = "80%")),
+                                    # column(width=4, align = "center",
+                                    #        actionBttn(inputId = "fetch_stocks",label = "Get data",
+                                    #                   style = "unite",
+                                    #                   color = "warning")),
                                     column(width = 6, align = "center",
                                            awesomeCheckbox(inputId = "50days",
-                                                           label = "Show 50 day moving-average",
+                                                           label = "50 day moving-average",
                                                            value = F,
                                                            status = "warning")),
                                     column(width = 6, align = "center",
                                            awesomeCheckbox(inputId = "200days",
-                                                           label = "Show 200 day moving-average",
+                                                           label = "200 day moving-average",
                                                            value = F,
                                                            status = "warning")),
                                     column(width=12,
@@ -215,6 +237,49 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
     tooltip_css <- "background-color:gray;color:white;padding:10px;border-radius:5px;font-family: Lora, sans-serif;font-weight:lighter;font-size:12px;"
+    
+    # Search function
+    observeEvent(input$search,{
+
+      output$search_res <- renderTable({
+      #input$search
+      
+      if(input$search!=""){
+      
+      term <- gsub(" ","",input$search,fixed = T)
+        
+      # Set up API request
+      searchcall <- paste0(base,
+                     "function=","SYMBOL_SEARCH",
+                     "&keywords=",term, # 
+                     "&datatype=",datatype,
+                     "&apikey=",key)
+      
+
+      # Fetch data - JSON
+      found <- GET(searchcall) %>%
+        httr::content(as = "text",
+                      encoding = "UTF-8") %>%
+        fromJSON(flatten = T)
+      
+      
+      
+      if(length(found[[1]])==0){
+         error <- data.frame(x = c(" "),
+                                y = ("Looks like nothing could be found. Please try another search term."))
+         names(error) <- NULL
+         error
+      } else {
+      # Extract data
+      found <- found[[1]][,c(2,1)]
+      names(found) <- NULL
+      found
+      }
+      
+      }
+      })
+    })
+    
     # Download & plot short-term indicator data
     observeEvent(input$fetch,{
         disable("fetch")
