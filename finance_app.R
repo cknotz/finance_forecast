@@ -23,89 +23,19 @@ library(shiny)
     library(httr)
     library(jsonlite)
 
-# Alpha Vantage functions
-#########################
-
-# Set up API request
-base <- "https://www.alphavantage.co/query?"
-type <- "TIME_SERIES_DAILY"
-datatype <- "json"
-size <- "full"
+# Alpha Vantage key
 key <- readLines("www/key.txt") # key.txt is not on GitHub; replace by own key if you want to use this app yourself
-
-# Function to download
-download_av <- function(symbol){
-# Construct call
-call <- paste0(base,
-       "function=",type,
-       "&symbol=",symbol,
-       "&outputsize=",size,
-       "&datatype=",datatype,
-       "&apikey=",key)
-
-# Fetch data - JSON
-data <- GET(call) %>% 
-    httr::content(as = "text",encoding = "UTF-8") %>% 
-    fromJSON(flatten = T)
-return(data)
-}
-
-# Function to check data and transform to tidy data frame
-munging_av <- function(x){
-#Check if call successful  
-if(length(x[[1]])==1) {
-  showNotification(paste0("Something seems to be wrong. Alpha Vantage says: '",x[[1]],"'"),
-                   type = "error")
-  print(paste0("Something's wrong. Alpha Vantage says :",x[[1]]),"'")
-} else { # Munge data
-  
-# Store meta info
-info <- x[[1]][[1]]
-tz <- x[[1]][[5]]
-symbol <- x[[1]][[2]]
-
-# Tidy
-y <- as.data.frame(unlist(x[[2]]))
-
-# Tidy
-y$id <- rownames(y)
-x <- separate(data = y,
-         col = id,
-         into = c("date","var"),
-         sep = ".[[:digit:]].[[:blank:]]",
-         remove = T
-         )
-x$value <- as.double(x[,1])
-x$date <- as.Date(x$date)
-x[,1] <- NULL
-
-# Reshape to wider
-x <- x %>% 
-    pivot_wider(
-        names_from = var,
-        values_from = value
-    )
-
-#Addign meta info
-x$symbol <- symbol
-x$tz <- tz
-
-return(x)
-message("Data are ready.")
-}
-}
-
+agent <- httr::user_agent("https://github.com/cknotz")
 
 ui <- dashboardPage(
-    dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 400),
+    dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 300),
     dashboardSidebar(
         sidebarMenu(id = "sidebar",
       menuItem("Introduction", tabName = "intro", icon = icon("info", lib = "font-awesome")),
       menuItem("Sentiment indicators", tabName = "indicators", icon = icon("dashboard")),
       menuItem("Stock prices", tabName = "data", icon = icon("chart-line", lib = "font-awesome"))
-      #textInput(inputId = "key", placeholder = "Enter your API key" ,label = NULL),
-      #actionButton(inputId = "submit", label = "Store key", width = 200),
-      #HTML("<br>"),
+      # HTML("<br><br><br>"),
+      # menuItemOutput("fetch_ind")
     )
     ),
     dashboardBody(shinyjs::useShinyjs(),
@@ -135,12 +65,10 @@ ui <- dashboardPage(
                                       <p>The stock price data are retrieved through the <a target='_blank'
                                       href='https://www.alphavantage.co/'>Alpha Vantage API</a>.</p>
                                       
-                                      <p>The forecast function for the stock market prices assumes the data follow
-                                      a simple random walk with drift process. Many (but not all!) economists think
-                                      this is a reasonable approximation of how stock market prices evolve.</p>
-                                      
-                                      <p>This is version 1.0. Future versions will feature an option to dynamically search and
-                                      download data for all stocks Alpha Vantage has data for.</p>"
+                                      <p>This is version 1.0. </p>"
+                                      # <p>The forecast function for the stock market prices assumes the data follow
+                                      # a simple random walk with drift process. Many (but not all!) economists think
+                                      # this is a reasonable approximation of how stock market prices evolve.</p>
                                       ))
                               )),
                       tabItem(tabName = "indicators",
@@ -150,9 +78,9 @@ ui <- dashboardPage(
                                       "<p>The interactive graphs below show the recent (last 90 days) development of some selected indicators of
                                         investor sentiment. These include:</p>
                                       <ul>
-                                        <li>High-yield or 'junk' bond (SPDR Blmbrg Barclays
-                                        High Yield Bd ETF, JNK) prices. Rising prices indicate investors are more willing to 
-                                        take high risks.</li>
+                                        <li>High-yield or 'junk' bond prices (SPDR Blmbrg Barclays
+                                        High Yield Bd ETF, JNK). Rising prices indicate investors are more willing to 
+                                        take risks.</li>
                                         <li>Gold Futures (Mini Gold Futures, YG=F). Rising prices indicate investors 
                                         seek low-risk assets.</li>
                                         <li>Worldwide GoogleTrends query volumes for 'debt'. Increased numbers of searches for this term are associated with 
@@ -184,19 +112,19 @@ ui <- dashboardPage(
                               ),
                       tabItem(tabName = "data",
                               fluidRow(
-                                box(width = 12,solidHeader = T,collapsible = T,collapsed = F,
-                                    title = "Search for ticker symbol",
+                                box(width = 12,solidHeader = T,collapsible = F,
+                                    title = NULL,
                                     column(12,
                                     searchInput(
                                       inputId = "search",
-                                      label = NULL,
-                                      placeholder = "Enter company name...",
+                                      label = "Search for ticker symbols/companies",
+                                      placeholder = "Enter company name or ticker symbol...",
                                       btnSearch = icon("search"), 
                                       btnReset = icon("remove"), 
                                       width = "80%"),
                                     tableOutput(outputId = "search_res"))
                                     ),
-                                box(width=12,solidHeader = T,collapsible = F, title = " ",
+                                box(width=12,solidHeader = T,collapsible = F, title = NULL,
                                     column(12,
                                            # pickerInput(inputId = "picker",
                                            #             choices = c("Alphabet Cl. A (GOOGL)" = "GOOGL",
@@ -210,26 +138,26 @@ ui <- dashboardPage(
                                               btnSearch = icon("search"), 
                                               btnReset = icon("remove"), 
                                               width = "80%")),
-                                    # column(width=4, align = "center",
-                                    #        actionBttn(inputId = "fetch_stocks",label = "Get data",
-                                    #                   style = "unite",
-                                    #                   color = "warning")),
+                                    column(width=12, align = "center",
+                                           plotOutput("stocksplot"),
+                                           HTML("<br>")
+                                           ),
+                                    column(width=12,
+                                           sliderInput(inputId = "daterange", label = "Adjust date range",
+                                                       min = as.Date("2015-01-01","%Y-%m-%d"),
+                                                       max = as.Date(as.character(as.Date(Sys.Date()-365)),"%Y-%m-%d"),
+                                                       value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
+                                                       timeFormat="%b %Y")),
                                     column(width = 6, align = "center",
                                            awesomeCheckbox(inputId = "50days",
-                                                           label = "50 day moving-average",
+                                                           label = "Show 50 day moving-average",
                                                            value = F,
                                                            status = "warning")),
                                     column(width = 6, align = "center",
                                            awesomeCheckbox(inputId = "200days",
-                                                           label = "200 day moving-average",
+                                                           label = "Show 200 day moving-average",
                                                            value = F,
-                                                           status = "warning")),
-                                    column(width=12,
-                                           sliderInput(inputId = "daterange", label = "Adjust start date",
-                                                       min = as.Date("2015-01-01","%Y-%m-%d"),
-                                                       max = as.Date(as.character(as.Date(Sys.Date()-365)),"%Y-%m-%d"),
-                                                       value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
-                                                       timeFormat="%b %Y"))
+                                                           status = "warning"))
                                     )
                               )
                               )))
@@ -237,6 +165,22 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
     tooltip_css <- "background-color:gray;color:white;padding:10px;border-radius:5px;font-family: Lora, sans-serif;font-weight:lighter;font-size:12px;"
+    
+    # Dynamic sidebar; object does not remove properly with ShinyWidgets
+    # observeEvent(input$sidebar,{
+    #   if(input$sidebar=="indicators"){
+    #   output$fetch_ind <- renderMenu({
+    #     actionBttn(inputId = "fetch_inds",
+    #                label = "Get data",
+    #                style = "stretch",
+    #                color = "warning",
+    #                size = "sm")
+    #   })
+    #   }else{
+    #     output$fetch_ind <- NULL
+    #   }
+    #   
+    # })
     
     # Search function
     observeEvent(input$search,{
@@ -249,6 +193,8 @@ server <- function(input, output, session) {
       term <- gsub(" ","",input$search,fixed = T)
         
       # Set up API request
+      base <- "https://www.alphavantage.co/query?"
+      datatype <- "json"
       searchcall <- paste0(base,
                      "function=","SYMBOL_SEARCH",
                      "&keywords=",term, # 
@@ -281,24 +227,10 @@ server <- function(input, output, session) {
     })
     
     # Download & plot short-term indicator data
-    observeEvent(input$fetch,{
-        disable("fetch")
+    observeEvent(input$fetch_inds,{
+        disable("fetch_inds")
         showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
         
-      # Getting data from Alpha Vantage
-      aapl <- download_av("AAPL")
-      aapl <- munging_av(aapl)
-      
-      googl <- download_av("GOOGL")
-      googl <- munging_av(googl)
-      
-      amzn <- download_av("AMZN")
-      amzn <- munging_av(amzn)
-      
-      msft <- download_av("MSFT")
-      msft <- munging_av(msft)
-      
-      
         # Getting data from GoogleTrends
         gtrends <- gtrends(keyword = c("debt"), time="today 3-m", gprop="web")
             trends <- gtrends$interest_over_time
@@ -480,6 +412,81 @@ server <- function(input, output, session) {
         
     })
     
+    # Download stock market price data from Alpha Vantage API
+    observeEvent(input$getstocks,{
+      if(input$getstocks==""){
+      print(input$getstocks)  
+      } else {
+      showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
+      
+      # Construct call
+      base <- "https://www.alphavantage.co/query?"
+      datatype <- "json"
+      size <- "full"
+      call <- paste0(base,
+             "function=","TIME_SERIES_DAILY",
+             "&symbol=",input$getstocks, #   "DTEGF"  "AAPL"
+             "&outputsize=",size,
+             "&datatype=",datatype,
+             "&apikey=",key)
+
+     
+      # Fetch data - CSV
+      data <- httr::GET(call, agent) %>%
+          httr::content(as = "text",encoding = "UTF-8") %>%
+          fromJSON(flatten = T)
+      
+      if(length(data[[1]])==1){
+        showNotification(paste0("Looks like something went wrong - possibly a misspelled ticker symbol? (Also, Alpha Vantage asks me to relay this to you: '",data[[1]],"')"),
+                         type = "error"
+        )
+        removeModal()
+      } else {
+        
+      # Store meta info
+      info <- data[[1]][[1]]
+      tz <- data[[1]][[5]]
+      symbol <- data[[1]][[2]]
+      
+      # Tidy data
+      inter <- as.data.frame(unlist(data[[2]]))
+
+      inter$id <- rownames(inter)
+      data <- separate(data = inter,
+               col = id,
+               into = c("date","var"),
+               sep = ".[[:digit:]].[[:blank:]]",
+               remove = T
+               )
+      data$value <- as.double(data[,1])
+      data$date <- as.Date(data$date)
+      data[,1] <- NULL
+      
+      # Reshape to wider
+      data <- data %>%
+          pivot_wider(
+              names_from = var,
+              values_from = value
+          )
+      
+      #Addign meta info
+      data$symbol <- symbol
+      data$tz <- tz
+      rm(inter)
+     #print(head(data))
+     #print(tail(data))
+     removeModal()
+     
+     # Graph
+     output$stocksplot <- renderPlot({
+     ggplot(data=data, aes(x=date,y=close)) +
+       geom_line()
+     })
+     
+     
+      } # closes second 'else' condition
+      } # closes first 'else' condition (input$getstocks!="")
+      })
     
     # rwf(y, h, drift=TRUE)
 }
