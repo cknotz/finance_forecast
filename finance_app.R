@@ -27,25 +27,23 @@ library(shiny)
 key <- readLines("www/key.txt") # key.txt is not on GitHub; replace by own key if you want to use this app with your own key
 agent <- httr::user_agent("https://github.com/cknotz")
 
-# Function to load Yahoo data while catching errors
-loadyahoo <- function(tickers){
+# Error-proof Function to load Yahoo data
+loadyahoo <- function(symbol,start,end,freq,thres){
           out <- tryCatch(
-            {data <- BatchGetSymbols(tickers = tickers,
-                                 first.date = first.date,
-                                 last.date = last.date,
-                                 freq.data = freq.data,
-                                 thresh.bad.data = 0.5,
+            {data <- BatchGetSymbols(tickers = symbol,
+                                 first.date = start,
+                                 last.date = end,
+                                 freq.data = freq,
+                                 thresh.bad.data = thres,
                                  cache.folder = file.path(tempdir(),
                                                           'BGS_Cache'))
               return(data)
             },
             error = function(cond){
               return("There's been an error. Either the ticker symbol is not correct or the time-series for this symbol might be too short.")
-              #message(cond)
             },
-            warning = function(cond){
+            warning = function(cond){ # getsymbols() posts errors as warnings
               return("There's been an error. Either the ticker symbol is not correct or the time-series for this symbol might be too short.")
-              #message(cond)
             },
             finally = {
               message("Done here")
@@ -53,7 +51,6 @@ loadyahoo <- function(tickers){
           )
           return(out)
 }
-
 
 ui <- dashboardPage(
     dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 300),
@@ -187,12 +184,12 @@ ui <- dashboardPage(
                                                        value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
                                                        timeFormat="%b %Y")),
                                     column(width = 6, align = "center",
-                                           awesomeCheckbox(inputId = "50days",
+                                           awesomeCheckbox(inputId = "ma50",
                                                            label = "Show 50 day moving-average",
                                                            value = F,
                                                            status = "warning")),
                                     column(width = 6, align = "center",
-                                           awesomeCheckbox(inputId = "200days",
+                                           awesomeCheckbox(inputId = "ma200",
                                                            label = "Show 200 day moving-average",
                                                            value = F,
                                                            status = "warning"))
@@ -464,7 +461,7 @@ server <- function(input, output, session) {
       size <- "full"
       call <- paste0(base,
              "function=","TIME_SERIES_DAILY",
-             "&symbol=",input$getstocks, #   "DTEGF"  "AAPL"  
+             "&symbol=",input$getstocks, #   "DTEGF"     
              "&outputsize=",size,
              "&datatype=",datatype,
              "&apikey=",key)
@@ -512,17 +509,24 @@ server <- function(input, output, session) {
       data$tz <- tz
       rm(inter)
   
-      # Limit to last 5 years - remove once AV corrected older data
-      data <- data[data$date>=Sys.Date() - 5*365,]
+    # Limit to last 5 years (remove once AV corrected older data)
+    data <- data[data$date>=Sys.Date() - 5*365,]
       
+    # Calculating moving averages
+    data <- data[order(data$date),] # reverse order
+    data$ma50 <- stats::filter(data$close,rep(1/50,50),sides=1)  
+    data$ma200 <- stats::filter(data$close,rep(1/200,200),sides=1)  
+    data <- data[rev(order(data$date)),]  # re-reverse order
+    
      removeModal()
      
      # Graph
      output$stocksplot <- renderPlot({
      ggplot(data=data, aes(x=date,y=close)) +
-       geom_line()
+       geom_line() +
+          {if(input$ma50==T) geom_line(aes(y=ma50))} +
+          {if(input$ma200==T) geom_line(aes(y=ma200))}    
      })
-     
      
       } # closes second 'else' condition
       } # closes first 'else' condition (input$getstocks!="")
@@ -530,16 +534,15 @@ server <- function(input, output, session) {
         if(input$getstocks==""){
       print(input$getstocks)  
       } else {
-        
-        # Setting date range
-        first.date <- Sys.Date() - 5*365
-            last.date <- Sys.Date()
-            freq.data <- 'daily'
        
         # Downloading data
         showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
         
-        data <- loadyahoo(tickers = input$getstocks)
+        data <- loadyahoo(symbol = input$getstocks,
+                  start = Sys.Date()-5*365,
+                  end = Sys.Date(),
+                  freq = "daily",
+                  thres = 0.5)
         
         if(is.character(data)){
           showNotification(paste0(data))
@@ -547,12 +550,18 @@ server <- function(input, output, session) {
         }else{
         data <- data[["df.tickers"]] %>% 
             select(price.close,ref.date)
+        
+        # Calculating moving averages
+        data$ma50 <- stats::filter(data$price.close,rep(1/50,50),sides=1)  
+        data$ma200 <- stats::filter(data$price.close,rep(1/200,200),sides=1)  
             
         removeModal()
         
         output$stocksplot <- renderPlot({    
         ggplot(data, aes(x=ref.date,y=price.close)) +
-          geom_line()
+          geom_line() +
+          {if(input$ma50==T) geom_line(aes(y=ma50))} +
+          {if(input$ma200==T) geom_line(aes(y=ma200))}
         })
       }}}
       })
