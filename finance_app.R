@@ -24,8 +24,36 @@ library(shiny)
     library(jsonlite)
 
 # Alpha Vantage key
-key <- readLines("www/key.txt") # key.txt is not on GitHub; replace by own key if you want to use this app yourself
+key <- readLines("www/key.txt") # key.txt is not on GitHub; replace by own key if you want to use this app with your own key
 agent <- httr::user_agent("https://github.com/cknotz")
+
+# Function to load Yahoo data while catching errors
+loadyahoo <- function(tickers){
+          out <- tryCatch(
+            {data <- BatchGetSymbols(tickers = tickers,
+                                 first.date = first.date,
+                                 last.date = last.date,
+                                 freq.data = freq.data,
+                                 thresh.bad.data = 0.5,
+                                 cache.folder = file.path(tempdir(),
+                                                          'BGS_Cache'))
+              return(data)
+            },
+            error = function(cond){
+              return("There's been an error. Either the ticker symbol is not correct or the time-series for this symbol might be too short.")
+              #message(cond)
+            },
+            warning = function(cond){
+              return("There's been an error. Either the ticker symbol is not correct or the time-series for this symbol might be too short.")
+              #message(cond)
+            },
+            finally = {
+              message("Done here")
+            }
+          )
+          return(out)
+}
+
 
 ui <- dashboardPage(
     dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 300),
@@ -125,7 +153,7 @@ ui <- dashboardPage(
                                     tableOutput(outputId = "search_res"))
                                     ),
                                 box(width=12,solidHeader = T,collapsible = F, title = NULL,
-                                    column(12,
+                                    column(8,
                                            # pickerInput(inputId = "picker",
                                            #             choices = c("Alphabet Cl. A (GOOGL)" = "GOOGL",
                                            #                         "Amazon (AMZN)" = "AMZN",
@@ -133,11 +161,21 @@ ui <- dashboardPage(
                                            #                         "Microsoft (MSFT" = "MSFT"))),
                                            searchInput(
                                               inputId = "getstocks",
-                                              label = NULL,
-                                              placeholder = "Enter ticker symbol...",
+                                              label = "Enter ticker symbol",
+                                              placeholder = "Reset before requesting same ticker twice",
                                               btnSearch = icon("search"), 
                                               btnReset = icon("remove"), 
                                               width = "80%")),
+                                    column(4,
+                                           radioGroupButtons(inputId = "datasource",
+                                                             label = "Select data source",
+                                                             choices = c("Alpha Vantage",
+                                                                         "Yahoo Finance"),
+                                                             status = "warning",
+                                                             checkIcon = list(
+                                                               yes = icon("ok",lib = "glyphicon")),
+                                                             size = "xs")
+                                           ),
                                     column(width=12, align = "center",
                                            plotOutput("stocksplot"),
                                            HTML("<br>")
@@ -414,6 +452,7 @@ server <- function(input, output, session) {
     
     # Download stock market price data from Alpha Vantage API
     observeEvent(input$getstocks,{
+      if(input$datasource=="Alpha Vantage"){
       if(input$getstocks==""){
       print(input$getstocks)  
       } else {
@@ -425,11 +464,10 @@ server <- function(input, output, session) {
       size <- "full"
       call <- paste0(base,
              "function=","TIME_SERIES_DAILY",
-             "&symbol=",input$getstocks, #   "DTEGF"  "AAPL"
+             "&symbol=",input$getstocks, #   "DTEGF"  "AAPL"  
              "&outputsize=",size,
              "&datatype=",datatype,
              "&apikey=",key)
-
      
       # Fetch data - CSV
       data <- httr::GET(call, agent) %>%
@@ -473,8 +511,10 @@ server <- function(input, output, session) {
       data$symbol <- symbol
       data$tz <- tz
       rm(inter)
-     #print(head(data))
-     #print(tail(data))
+  
+      # Limit to last 5 years - remove once AV corrected older data
+      data <- data[data$date>=Sys.Date() - 5*365,]
+      
      removeModal()
      
      # Graph
@@ -486,6 +526,35 @@ server <- function(input, output, session) {
      
       } # closes second 'else' condition
       } # closes first 'else' condition (input$getstocks!="")
+      } else { # moves to Yahoo finance
+        if(input$getstocks==""){
+      print(input$getstocks)  
+      } else {
+        
+        # Setting date range
+        first.date <- Sys.Date() - 5*365
+            last.date <- Sys.Date()
+            freq.data <- 'daily'
+       
+        # Downloading data
+        showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
+        
+        data <- loadyahoo(tickers = input$getstocks)
+        
+        if(is.character(data)){
+          showNotification(paste0(data))
+          removeModal()
+        }else{
+        data <- data[["df.tickers"]] %>% 
+            select(price.close,ref.date)
+            
+        removeModal()
+        
+        output$stocksplot <- renderPlot({    
+        ggplot(data, aes(x=ref.date,y=price.close)) +
+          geom_line()
+        })
+      }}}
       })
     
     # rwf(y, h, drift=TRUE)
