@@ -88,7 +88,7 @@ ui <- dashboardPage(
                                       on short-term indicators are retrieved from Yahoo Finance and GoogleTrends.</p>
                                       
                                       <p>The stock price data are retrieved through the <a target='_blank'
-                                      href='https://www.alphavantage.co/'>Alpha Vantage API</a>.</p>
+                                      href='https://www.alphavantage.co/'>Alpha Vantage API</a> and Yahoo Finance.</p>
                                       
                                       <p>This is version 1.0. </p>"
                                       # <p>The forecast function for the stock market prices assumes the data follow
@@ -173,30 +173,34 @@ ui <- dashboardPage(
                                                                yes = icon("ok",lib = "glyphicon")),
                                                              size = "xs")
                                            ),
-                                    column(width=12, align = "center",
-                                           plotOutput("stocksplot"),
-                                           HTML("<br>")
-                                           ),
-                                    column(width=12,
-                                           sliderInput(inputId = "daterange", label = "Adjust date range",
-                                                       min = as.Date("2015-01-01","%Y-%m-%d"),
-                                                       max = as.Date(as.character(as.Date(Sys.Date()-365)),"%Y-%m-%d"),
-                                                       value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
-                                                       timeFormat="%b %Y")),
                                     column(width = 6, align = "center",
                                            awesomeCheckbox(inputId = "ma50",
                                                            label = "Show 50 day moving-average",
-                                                           value = F,
+                                                           value = T,
                                                            status = "warning")),
                                     column(width = 6, align = "center",
                                            awesomeCheckbox(inputId = "ma200",
                                                            label = "Show 200 day moving-average",
-                                                           value = F,
-                                                           status = "warning"))
+                                                           value = T,
+                                                           status = "info")),
+                                    column(width=12, align = "center",
+                                           girafeOutput("stocksplot"),
+                                           HTML("<br>")
+                                           ),
+                                    column(width=12,
+                                           sliderInput(inputId = "daterange", label = "Adjust start date",
+                                                       min = as.Date("2015-01-01","%Y-%m-%d"),
+                                                       max = as.Date(as.character(as.Date(Sys.Date()-180)),"%Y-%m-%d"),
+                                                       value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
+                                                       timeFormat="%b %Y"))
                                     )
                               )
                               )))
 )
+
+
+slider_date <- as.Date("2015-01-01","%Y-%m-%d")
+
 
 server <- function(input, output, session) {
     tooltip_css <- "background-color:gray;color:white;padding:10px;border-radius:5px;font-family: Lora, sans-serif;font-weight:lighter;font-size:12px;"
@@ -341,7 +345,7 @@ server <- function(input, output, session) {
                         theme(axis.text = element_text(colour = "#d3d3d3", size = 12)) +
                         theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
-                    labs(caption = "Source: GoogleTrends")
+                    labs(caption = "Source: GoogleTrends; orange line indicates LOESS smoother.")
            
            girafe(ggobj = p,
                   fonts=list(sans = "Arial"),
@@ -372,7 +376,7 @@ server <- function(input, output, session) {
                     theme(axis.text = element_text(colour = "#d3d3d3", size = 12)) +
                     theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
-                    labs(caption = "Source: Yahoo Finance")
+                    labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.")
         
         girafe(ggobj = p,
             fonts=list(sans = "Arial"),
@@ -404,7 +408,7 @@ server <- function(input, output, session) {
                     theme(axis.text = element_text(colour = "#d3d3d3", size = 12)) +
                     theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
-                    labs(caption = "Source: Yahoo Finance") 
+                    labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.") 
         
         girafe(ggobj = p,
             fonts=list(sans = "Arial"),
@@ -435,7 +439,7 @@ server <- function(input, output, session) {
                     theme(axis.text = element_text(colour = "#d3d3d3", size = 12)) +
                     theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
-                    labs(caption = "Source: Yahoo Finance") 
+                    labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.") 
         
         girafe(ggobj = p,
             fonts=list(sans = "Arial"),
@@ -521,11 +525,33 @@ server <- function(input, output, session) {
      removeModal()
      
      # Graph
-     output$stocksplot <- renderPlot({
-     ggplot(data=data, aes(x=date,y=close)) +
-       geom_line() +
-          {if(input$ma50==T) geom_line(aes(y=ma50))} +
-          {if(input$ma200==T) geom_line(aes(y=ma200))}    
+     output$stocksplot <- renderGirafe({
+     p <- ggplot(data=data, aes(x=date,y=close)) +
+      geom_line(color="white", alpha=.6) +
+      geom_point_interactive(fill="white", color="white", alpha=.8,
+                             aes(tooltip=paste0("Date: ",date,"\n","Closing price: ",round(close,2)))) +
+          {if(input$ma50==T) geom_line(aes(y=ma50), color="#ff9900", alpha=.6, size=1.5)} +
+          {if(input$ma200==T) geom_line(aes(y=ma200), color="#46acd1", alpha=.6, size=1.5)} +
+       xlab("") +
+       ylab("Closing price") +
+          theme_minimal(base_family = "sans") +
+          theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+          theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
+          theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
+          theme(panel.grid.minor.x = element_blank()) +
+          theme(panel.grid.minor.y = element_blank()) +
+          theme(plot.background = element_rect(fill="#343e48", color = "#343e48")) +
+          theme(axis.text = element_text(colour = "#d3d3d3", size = 9)) +
+          theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
+          theme(plot.caption = element_text(color="#d3d3d3"))
+     
+     girafe(ggobj = p, # width_svg = 7, height_svg = 4,
+                  fonts=list(sans = "Arial"),
+                  options = list(
+                      opts_selection(type = "none"),
+                      opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
+                      opts_toolbar(saveaspng = FALSE)))
+     
      })
      
       } # closes second 'else' condition
@@ -557,11 +583,32 @@ server <- function(input, output, session) {
             
         removeModal()
         
-        output$stocksplot <- renderPlot({    
-        ggplot(data, aes(x=ref.date,y=price.close)) +
-          geom_line() +
-          {if(input$ma50==T) geom_line(aes(y=ma50))} +
-          {if(input$ma200==T) geom_line(aes(y=ma200))}
+        output$stocksplot <- renderGirafe({    
+        p <- ggplot(data, aes(x=ref.date,y=price.close)) +
+          geom_line(color="white", alpha=.6) +
+          geom_point_interactive(fill="white", color="white", alpha=.8,
+                             aes(tooltip=paste0("Date: ",ref.date,"\n","Closing price: ",round(price.close,2)))) +
+          {if(input$ma50==T) geom_line(aes(y=ma50), color="#ff9900", alpha=.6, size=1.5)} +
+          {if(input$ma200==T) geom_line(aes(y=ma200), color="#46acd1", alpha=.6, size=1.5)} +
+          xlab("") +
+          ylab("Closing price") +
+            theme_minimal(base_family = "sans") +
+            theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+            theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
+            theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
+            theme(panel.grid.minor.x = element_blank()) +
+            theme(panel.grid.minor.y = element_blank()) +
+            theme(plot.background = element_rect(fill="#343e48", color = "#343e48")) +
+            theme(axis.text = element_text(colour = "#d3d3d3", size = 9)) +
+            theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
+            theme(plot.caption = element_text(color="#d3d3d3"))
+     
+     girafe(ggobj = p, # width_svg = 7, height_svg = 4,
+                  fonts=list(sans = "Arial"),
+                  options = list(
+                      opts_selection(type = "none"),
+                      opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
+                      opts_toolbar(saveaspng = FALSE)))
         })
       }}}
       })
