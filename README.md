@@ -6,4 +6,4 @@ daily closing prices of stocks and other financial products listed by Alpha Vant
 
 The dashboard is publicly available at: https://cknotz.shinyapps.io/finance_forecast/
 
-The `finance_app.R` file contains `R` code to produce the dashboard itself.
+The `finance_app.R` file contains `R` code to produce the dashboard.
