@@ -370,7 +370,7 @@ server <- function(input, output, session) {
         
     })
     
-    # Download DJIA data & estimate forecasts
+    # Download stock market data
     observeEvent(input$forecast, {
       disable("forecast")
       showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
