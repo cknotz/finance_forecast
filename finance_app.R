@@ -52,6 +52,7 @@ loadyahoo <- function(symbol,start,end,freq,thres){
           return(out)
 }
 
+
 ui <- dashboardPage(
     dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 300),
     dashboardSidebar(
@@ -77,9 +78,11 @@ ui <- dashboardPage(
                               fluidRow(
                                 box(width = 12, solidHeader = F,collapsible = F,title = "About this dashboard",
                                     HTML(
-                                      "<p>This dashboard features data on current stock market developments, including
-                                      a selection of short-term indicators of investor sentiment and prices of
-                                      selected stocks and ETFs.</p>
+                                      "<p>This dashboard features data on stock market developments, including
+                                      a selection of short-term indicators of investor sentiment and daily closing prices of stocks
+                                      and other financial products that are listed by <a target='_blank'
+                                      href='https://www.alphavantage.co/'>Alpha Vantage</a> and <a
+                                      target='_blank' href='https://finance.yahoo.com/'>Yahoo Finance</a>.</p>
                                       
                                       <p>The short-term indicators are selected based (roughly) on this helpful Medium 
                                       <a href='https://medium.com/concoda/how-to-predict-major-market-shifts-99419ae1d23c'
@@ -87,10 +90,9 @@ ui <- dashboardPage(
                                       (<a href='https://doi.org/10.1038/srep01684' target='_blank'>2013</a>). The data
                                       on short-term indicators are retrieved from Yahoo Finance and GoogleTrends.</p>
                                       
-                                      <p>The stock price data are retrieved through the <a target='_blank'
-                                      href='https://www.alphavantage.co/'>Alpha Vantage API</a> and Yahoo Finance.</p>
-                                      
-                                      <p>This is version 1.0. </p>"
+                                      <p>The stock price data and ticker symbol information are retrieved through the 
+                                      Alpha Vantage API and (because of some quality issues with the Alpha Vantage data) 
+                                      also from Yahoo Finance.</p>"
                                       # <p>The forecast function for the stock market prices assumes the data follow
                                       # a simple random walk with drift process. Many (but not all!) economists think
                                       # this is a reasonable approximation of how stock market prices evolve.</p>
@@ -191,7 +193,7 @@ ui <- dashboardPage(
                                            sliderInput(inputId = "daterange", label = "Adjust start date",
                                                        min = as.Date("2015-01-01","%Y-%m-%d"),
                                                        max = as.Date(as.character(as.Date(Sys.Date()-180)),"%Y-%m-%d"),
-                                                       value = as.Date(as.character(as.Date(Sys.Date()-3*365)),"%Y-%m-%d"),
+                                                       value = as.Date("2015-01-01","%Y-%m-%d"),
                                                        timeFormat="%b %Y"))
                                     )
                               )
@@ -199,11 +201,10 @@ ui <- dashboardPage(
 )
 
 
-slider_date <- as.Date("2015-01-01","%Y-%m-%d")
-
-
 server <- function(input, output, session) {
     tooltip_css <- "background-color:gray;color:white;padding:10px;border-radius:5px;font-family: Lora, sans-serif;font-weight:lighter;font-size:12px;"
+    
+    react <- reactiveValues()
     
     # Dynamic sidebar; object does not remove properly with ShinyWidgets
     # observeEvent(input$sidebar,{
@@ -515,6 +516,11 @@ server <- function(input, output, session) {
   
     # Limit to last 5 years (remove once AV corrected older data)
     data <- data[data$date>=Sys.Date() - 5*365,]
+   
+    # Update date range slider
+    updateSliderInput(session, inputId = "daterange",
+                      min = min(data$date),
+                      value = min(data$date))
       
     # Calculating moving averages
     data <- data[order(data$date),] # reverse order
@@ -526,9 +532,9 @@ server <- function(input, output, session) {
      
      # Graph
      output$stocksplot <- renderGirafe({
-     p <- ggplot(data=data, aes(x=date,y=close)) +
+     p <- ggplot(data=data[data$date>=input$daterange,], aes(x=date,y=close)) +
       geom_line(color="white", alpha=.6) +
-      geom_point_interactive(fill="white", color="white", alpha=.8,
+      geom_point_interactive(fill="white", color="white", alpha=.8,size = .75,
                              aes(tooltip=paste0("Date: ",date,"\n","Closing price: ",round(close,2)))) +
           {if(input$ma50==T) geom_line(aes(y=ma50), color="#ff9900", alpha=.6, size=1.5)} +
           {if(input$ma200==T) geom_line(aes(y=ma200), color="#46acd1", alpha=.6, size=1.5)} +
@@ -545,7 +551,7 @@ server <- function(input, output, session) {
           theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
           theme(plot.caption = element_text(color="#d3d3d3"))
      
-     girafe(ggobj = p, # width_svg = 7, height_svg = 4,
+     girafe(ggobj = p, width_svg = 7, height_svg = 4,
                   fonts=list(sans = "Arial"),
                   options = list(
                       opts_selection(type = "none"),
@@ -580,13 +586,18 @@ server <- function(input, output, session) {
         # Calculating moving averages
         data$ma50 <- stats::filter(data$price.close,rep(1/50,50),sides=1)  
         data$ma200 <- stats::filter(data$price.close,rep(1/200,200),sides=1)  
+        
+        # Update date range slider
+        updateSliderInput(session, inputId = "daterange",
+                          min = min(data$ref.date),
+                          value = min(data$ref.date))
             
         removeModal()
         
         output$stocksplot <- renderGirafe({    
-        p <- ggplot(data, aes(x=ref.date,y=price.close)) +
+        p <- ggplot(data[data$ref.date>=input$daterange,], aes(x=ref.date,y=price.close)) +
           geom_line(color="white", alpha=.6) +
-          geom_point_interactive(fill="white", color="white", alpha=.8,
+          geom_point_interactive(fill="white", color="white", alpha=.8,size = .75,
                              aes(tooltip=paste0("Date: ",ref.date,"\n","Closing price: ",round(price.close,2)))) +
           {if(input$ma50==T) geom_line(aes(y=ma50), color="#ff9900", alpha=.6, size=1.5)} +
           {if(input$ma200==T) geom_line(aes(y=ma200), color="#46acd1", alpha=.6, size=1.5)} +
@@ -603,7 +614,7 @@ server <- function(input, output, session) {
             theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
             theme(plot.caption = element_text(color="#d3d3d3"))
      
-     girafe(ggobj = p, # width_svg = 7, height_svg = 4,
+     girafe(ggobj = p, width_svg = 7, height_svg = 4,
                   fonts=list(sans = "Arial"),
                   options = list(
                       opts_selection(type = "none"),
