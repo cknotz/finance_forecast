@@ -52,7 +52,6 @@ loadyahoo <- function(symbol,start,end,freq,thres){
           return(out)
 }
 
-
 ui <- dashboardPage(
     dashboardHeader(title = "Stock Market Data Dashboard", titleWidth = 300),
     dashboardSidebar(
@@ -230,8 +229,8 @@ server <- function(input, output, session) {
       
       if(input$search!=""){
       
-      term <- gsub(" ","",input$search,fixed = T)
-        
+      term <- strsplit(input$search, " ")[[1]][1] # gsub(" ","",input$search,fixed = T)
+      
       # Set up API request
       base <- "https://www.alphavantage.co/query?"
       datatype <- "json"
