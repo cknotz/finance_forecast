@@ -91,7 +91,13 @@ ui <- dashboardPage(
                                       
                                       <p>The stock price data and ticker symbol information are retrieved through the 
                                       Alpha Vantage API and (because of some quality issues with the Alpha Vantage data) 
-                                      also from Yahoo Finance.</p>"
+                                      also from Yahoo Finance.</p>
+                                      
+                                      <p>DISCLAIMER: This dashboard does not predict stock market movements and the information
+                                      featured here does not constitute investment advice. If you base any investment
+                                      decisions on information retrieved from this dashboard, you do so voluntarily and entirely at your 
+                                      own risk. The author of this dashboard rejects all liability for any damages incurred
+                                      while or following your use of this dashboard. Your use of this dashboard implies your consent to these terms.</p>"
                                       # <p>The forecast function for the stock market prices assumes the data follow
                                       # a simple random walk with drift process. Many (but not all!) economists think
                                       # this is a reasonable approximation of how stock market prices evolve.</p>
