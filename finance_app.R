@@ -24,7 +24,7 @@ library(shiny)
     library(jsonlite)
 
 # Alpha Vantage key
-key <- readLines("www/key.txt") # key.txt is not on GitHub; replace by own key if you want to use this app with your own key
+key <- readLines("www/key.txt") # key.txt is not on GitHub; pls. replace with own key 
 agent <- httr::user_agent("https://github.com/cknotz")
 
 # Error-proof Function to load Yahoo data
@@ -82,20 +82,20 @@ ui <- dashboardPage(
                                       and other financial products that are listed by <a target='_blank'
                                       href='https://www.alphavantage.co/'>Alpha Vantage</a> and <a
                                       target='_blank' href='https://finance.yahoo.com/'>Yahoo Finance</a>.</p>
-                                      
-                                      <p>The short-term indicators are selected based (roughly) on this helpful Medium 
+
+                                      <p>The short-term indicators are selected based (roughly) on this helpful Medium
                                       <a href='https://medium.com/concoda/how-to-predict-major-market-shifts-99419ae1d23c'
-                                       target='_blank'>post</a> and the <i>Nature</i> article by Preis et al. 
+                                       target='_blank'>post</a> and the <i>Nature</i> article by Preis et al.
                                       (<a href='https://doi.org/10.1038/srep01684' target='_blank'>2013</a>). The data
                                       on short-term indicators are retrieved from Yahoo Finance and GoogleTrends.</p>
-                                      
-                                      <p>The stock price data and ticker symbol information are retrieved through the 
-                                      Alpha Vantage API and (because of some quality issues with the Alpha Vantage data) 
+
+                                      <p>The stock price data and ticker symbol information are retrieved through the
+                                      Alpha Vantage API and (because of some quality issues with the Alpha Vantage data)
                                       also from Yahoo Finance.</p>
-                                      
+
                                       <p>DISCLAIMER: This dashboard does not predict stock market movements and the information
                                       featured here does not constitute investment advice. If you base any investment
-                                      decisions on information retrieved from this dashboard, you do so voluntarily and entirely at your 
+                                      decisions on information retrieved from this dashboard, you do so voluntarily and entirely at your
                                       own risk. The author of this dashboard rejects all liability for any damages incurred
                                       while or following your use of this dashboard. Your use of this dashboard implies your consent to these terms.</p>"
                                       # <p>The forecast function for the stock market prices assumes the data follow
@@ -111,12 +111,12 @@ ui <- dashboardPage(
                                         investor sentiment. These include:</p>
                                       <ul>
                                         <li>High-yield or 'junk' bond prices (SPDR Blmbrg Barclays
-                                        High Yield Bd ETF, JNK). Rising prices indicate investors are more willing to 
+                                        High Yield Bd ETF, JNK). Rising prices indicate investors are more willing to
                                         take risks.</li>
-                                        <li>Gold Futures (Mini Gold Futures, YG=F). Rising prices indicate investors 
+                                        <li>Gold Futures (Mini Gold Futures, YG=F). Rising prices indicate investors
                                         seek low-risk assets.</li>
-                                        <li>Worldwide GoogleTrends query volumes for 'debt'. Increased numbers of searches for this term are associated with 
-                                        subsequent drops in stock market prices (see <a href='https://doi.org/10.1038/srep01684' 
+                                        <li>Worldwide GoogleTrends query volumes for 'debt'. Increased numbers of searches for this term are associated with
+                                        subsequent drops in stock market prices (see <a href='https://doi.org/10.1038/srep01684'
                                         target='_blank'>Preis et al., 2013</a>).</li>
                                         <li>U.S. Treasury Bond Futures (ZB=F). Rising prices indicate investors seek
                                         low-risk assets.</li>
@@ -151,8 +151,8 @@ ui <- dashboardPage(
                                       inputId = "search",
                                       label = "Search for ticker symbols/companies",
                                       placeholder = "Enter company name or ticker symbol...",
-                                      btnSearch = icon("search"), 
-                                      btnReset = icon("remove"), 
+                                      btnSearch = icon("search"),
+                                      btnReset = icon("remove"),
                                       width = "80%"),
                                     tableOutput(outputId = "search_res"))
                                     ),
@@ -167,8 +167,8 @@ ui <- dashboardPage(
                                               inputId = "getstocks",
                                               label = "Enter ticker symbol",
                                               placeholder = "Reset before requesting same ticker twice",
-                                              btnSearch = icon("search"), 
-                                              btnReset = icon("remove"), 
+                                              btnSearch = icon("search"),
+                                              btnReset = icon("remove"),
                                               width = "80%")),
                                     column(4,
                                            radioGroupButtons(inputId = "datasource",
@@ -208,9 +208,9 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
     tooltip_css <- "background-color:gray;color:white;padding:10px;border-radius:5px;font-family: Lora, sans-serif;font-weight:lighter;font-size:12px;"
-    
+
     react <- reactiveValues()
-    
+
     # Dynamic sidebar; object does not remove properly with ShinyWidgets
     # observeEvent(input$sidebar,{
     #   if(input$sidebar=="indicators"){
@@ -224,37 +224,37 @@ server <- function(input, output, session) {
     #   }else{
     #     output$fetch_ind <- NULL
     #   }
-    #   
+    #
     # })
-    
+
     # Search function
     observeEvent(input$search,{
 
       output$search_res <- renderTable({
       #input$search
-      
+
       if(input$search!=""){
-      
+
       term <- strsplit(input$search, " ")[[1]][1] # gsub(" ","",input$search,fixed = T)
-      
+
       # Set up API request
       base <- "https://www.alphavantage.co/query?"
       datatype <- "json"
       searchcall <- paste0(base,
                      "function=","SYMBOL_SEARCH",
-                     "&keywords=",term, # 
+                     "&keywords=",term, #
                      "&datatype=",datatype,
                      "&apikey=",key)
-      
+
 
       # Fetch data - JSON
       found <- GET(searchcall) %>%
         httr::content(as = "text",
                       encoding = "UTF-8") %>%
         fromJSON(flatten = T)
-      
-      
-      
+
+
+
       if(length(found[[1]])==0){
          error <- data.frame(x = c(" "),
                                 y = ("Looks like nothing could be found. Please try another search term."))
@@ -266,69 +266,69 @@ server <- function(input, output, session) {
       names(found) <- NULL
       found
       }
-      
+
       }
       })
     })
-    
+
     # Download & plot short-term indicator data
     observeEvent(input$fetch_inds,{
         disable("fetch_inds")
-        showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
-        
+        showModal(modalDialog("Fetching data, please wait...", footer=NULL))
+
         # Getting data from GoogleTrends
         gtrends <- gtrends(keyword = c("debt"), time="today 3-m", gprop="web")
             trends <- gtrends$interest_over_time
             rm(gtrends)
-            trends <- pivot_wider(trends,names_from = keyword, values_from = hits) %>% 
+            trends <- pivot_wider(trends,names_from = keyword, values_from = hits) %>%
                 select(date,debt)
             trends$date <- as.Date(trends$date)
-        
+
         # Getting data from Yahoo Finance
         first.date <- Sys.Date() - 90
             last.date <- Sys.Date()
             freq.data <- 'daily'
-        
+
         tickers <- c('JNK') # Junk bonds
-        
+
         jnkdata <- BatchGetSymbols(tickers = tickers,
                                  first.date = first.date,
                                  last.date = last.date,
                                  freq.data = freq.data,
                                  cache.folder = file.path(tempdir(),
                                                           'BGS_Cache') ) # cache in tempdir())
-        jnk <- jnkdata[["df.tickers"]] %>% 
+        jnk <- jnkdata[["df.tickers"]] %>%
             select(price.close,ref.date)
             rm(tickers,jnkdata)
-            
+
         tickers <- c('YG=F') # Gold futures
-        
+
         golddata <- BatchGetSymbols(tickers = tickers,
                                  first.date = first.date,
                                  last.date = last.date,
                                  freq.data = freq.data,
                                  cache.folder = file.path(tempdir(),
                                                           'BGS_Cache') ) # cache in tempdir())
-        gold <- golddata[["df.tickers"]] %>% 
+        gold <- golddata[["df.tickers"]] %>%
             select(price.close,ref.date)
             rm(tickers,golddata)
-            
-        
+
+
         tickers <- c('ZB=F') # Treasury futures
-        
+
         zbdata <- BatchGetSymbols(tickers = tickers,
                                  first.date = first.date,
                                  last.date = last.date,
                                  freq.data = freq.data,
                                  cache.folder = file.path(tempdir(),
                                                           'BGS_Cache') ) # cache in tempdir())
-        zb <- zbdata[["df.tickers"]] %>% 
+        zb <- zbdata[["df.tickers"]] %>%
             select(price.close,ref.date)
             rm(tickers,zbdata)
-            
-          
+
+
         removeModal()
-        
+
         # Drawing graphs
         output$gtrends <- renderGirafe({
            p <- ggplot(data = trends, aes(x=date,y=debt)) +
@@ -342,7 +342,7 @@ server <- function(input, output, session) {
                     scale_x_date(date_labels = "%b-%Y") +
                     ylab("Web searches for 'debt' as proportion of all searches") +
                     theme_minimal(base_family = "sans") +
-                        theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+                        theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) +
                         theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
                         theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
                         theme(panel.grid.minor.x = element_blank()) +
@@ -352,7 +352,7 @@ server <- function(input, output, session) {
                         theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
                     labs(caption = "Source: GoogleTrends; orange line indicates LOESS smoother.")
-           
+
            girafe(ggobj = p,
                   fonts=list(sans = "Arial"),
                   options = list(
@@ -360,7 +360,7 @@ server <- function(input, output, session) {
                       opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
                       opts_toolbar(saveaspng = FALSE)))
         })
-        
+
         output$gold <- renderGirafe({
         p <- ggplot(data=gold,aes(x=ref.date,y=price.close)) +
                 geom_line(color="white", size=.6, alpha=.6) +
@@ -373,7 +373,7 @@ server <- function(input, output, session) {
                 scale_x_date(date_labels = "%b-%Y") +
                 ylab("Mini Gold Futures, closing price in USD") +
                 theme_minimal(base_family = "sans") +
-                    theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+                    theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) +
                     theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
                     theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
                     theme(panel.grid.minor.x = element_blank()) +
@@ -383,16 +383,16 @@ server <- function(input, output, session) {
                     theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
                     labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.")
-        
+
         girafe(ggobj = p,
             fonts=list(sans = "Arial"),
             options = list(
                 opts_selection(type = "none"),
                 opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
                 opts_toolbar(saveaspng = FALSE)))
-            
+
         })
-        
+
         output$jnk <- renderGirafe({
         p <- ggplot(data=jnk, aes(x=ref.date,y=price.close)) +
                 geom_line(color="white", size=.6, alpha=.6) +
@@ -405,7 +405,7 @@ server <- function(input, output, session) {
                 scale_x_date(date_labels = "%b-%Y") +
                 ylab("High Yield Bond ETF, closing price in USD") +
                 theme_minimal(base_family = "sans") +
-                    theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+                    theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) +
                     theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
                     theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
                     theme(panel.grid.minor.x = element_blank()) +
@@ -414,8 +414,8 @@ server <- function(input, output, session) {
                     theme(axis.text = element_text(colour = "#d3d3d3", size = 12)) +
                     theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
-                    labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.") 
-        
+                    labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.")
+
         girafe(ggobj = p,
             fonts=list(sans = "Arial"),
             options = list(
@@ -423,7 +423,7 @@ server <- function(input, output, session) {
                 opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
                 opts_toolbar(saveaspng = FALSE)))
         })
-        
+
         output$zb <- renderGirafe({
         p <- ggplot(data=zb, aes(x=ref.date,y=price.close)) +
                 geom_line(color="white", size=.6, alpha=.6) +
@@ -436,7 +436,7 @@ server <- function(input, output, session) {
                 scale_x_date(date_labels = "%b-%Y") +
                 ylab("US Treasury Bond Futures, closing price in USD") +
                 theme_minimal(base_family = "sans") +
-                    theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+                    theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) +
                     theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
                     theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
                     theme(panel.grid.minor.x = element_blank()) +
@@ -445,54 +445,54 @@ server <- function(input, output, session) {
                     theme(axis.text = element_text(colour = "#d3d3d3", size = 12)) +
                     theme(axis.title = element_text(color = "#d3d3d3", size = 12)) +
                         theme(plot.caption = element_text(color="#d3d3d3")) +
-                    labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.") 
-        
+                    labs(caption = "Source: Yahoo Finance; orange line indicates LOESS smoother.")
+
         girafe(ggobj = p,
             fonts=list(sans = "Arial"),
             options = list(
                 opts_selection(type = "none"),
                 opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
-                opts_toolbar(saveaspng = FALSE)))    
+                opts_toolbar(saveaspng = FALSE)))
         })
-        
+
     })
-    
+
     # Download stock market price data from Alpha Vantage API
     observeEvent(input$getstocks,{
       if(input$datasource=="Alpha Vantage"){
       if(input$getstocks==""){
-      print(input$getstocks)  
+      print(input$getstocks)
       } else {
-      showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
-      
+      showModal(modalDialog("Fetching data, please wait...", footer=NULL))
+
       # Construct call
       base <- "https://www.alphavantage.co/query?"
       datatype <- "json"
       size <- "full"
       call <- paste0(base,
              "function=","TIME_SERIES_DAILY",
-             "&symbol=",input$getstocks, #   "DTEGF"     
+             "&symbol=",input$getstocks, #   "DTEGF"
              "&outputsize=",size,
              "&datatype=",datatype,
              "&apikey=",key)
-     
+
       # Fetch data - CSV
       data <- httr::GET(call, agent) %>%
           httr::content(as = "text",encoding = "UTF-8") %>%
           fromJSON(flatten = T)
-      
+
       if(length(data[[1]])==1){
         showNotification(paste0("Looks like something went wrong - possibly a misspelled ticker symbol? (Also, Alpha Vantage asks me to relay this to you: '",data[[1]],"')"),
                          type = "error"
         )
         removeModal()
       } else {
-        
+
       # Store meta info
       info <- data[[1]][[1]]
       tz <- data[[1]][[5]]
       symbol <- data[[1]][[2]]
-      
+
       # Tidy data
       inter <- as.data.frame(unlist(data[[2]]))
 
@@ -506,35 +506,35 @@ server <- function(input, output, session) {
       data$value <- as.double(data[,1])
       data$date <- as.Date(data$date)
       data[,1] <- NULL
-      
+
       # Reshape to wider
       data <- data %>%
           pivot_wider(
               names_from = var,
               values_from = value
           )
-      
+
       #Addign meta info
       data$symbol <- symbol
       data$tz <- tz
       rm(inter)
-  
+
     # Limit to last 5 years (remove once AV corrected older data)
     data <- data[data$date>=Sys.Date() - 5*365,]
-   
+
     # Update date range slider
     updateSliderInput(session, inputId = "daterange",
                       min = min(data$date),
                       value = min(data$date))
-      
+
     # Calculating moving averages
     data <- data[order(data$date),] # reverse order
-    data$ma50 <- stats::filter(data$close,rep(1/50,50),sides=1)  
-    data$ma200 <- stats::filter(data$close,rep(1/200,200),sides=1)  
+    data$ma50 <- stats::filter(data$close,rep(1/50,50),sides=1)
+    data$ma200 <- stats::filter(data$close,rep(1/200,200),sides=1)
     data <- data[rev(order(data$date)),]  # re-reverse order
-    
+
      removeModal()
-     
+
      # Graph
      output$stocksplot <- renderGirafe({
      p <- ggplot(data=data[data$date>=input$daterange,], aes(x=date,y=close)) +
@@ -546,7 +546,7 @@ server <- function(input, output, session) {
        xlab("") +
        ylab("Closing price") +
           theme_minimal(base_family = "sans") +
-          theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+          theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) +
           theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
           theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
           theme(panel.grid.minor.x = element_blank()) +
@@ -555,51 +555,51 @@ server <- function(input, output, session) {
           theme(axis.text = element_text(colour = "#d3d3d3", size = 9)) +
           theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
           theme(plot.caption = element_text(color="#d3d3d3"))
-     
+
      girafe(ggobj = p, width_svg = 7, height_svg = 4,
                   fonts=list(sans = "Arial"),
                   options = list(
                       opts_selection(type = "none"),
                       opts_tooltip(offx = 10, offy = 10,css = tooltip_css),
                       opts_toolbar(saveaspng = FALSE)))
-     
+
      })
-     
+
       } # closes second 'else' condition
       } # closes first 'else' condition (input$getstocks!="")
       } else { # moves to Yahoo finance
         if(input$getstocks==""){
-      print(input$getstocks)  
+      print(input$getstocks)
       } else {
-       
+
         # Downloading data
-        showModal(modalDialog("Fetching data, please wait...", footer=NULL))  
-        
+        showModal(modalDialog("Fetching data, please wait...", footer=NULL))
+
         data <- loadyahoo(symbol = input$getstocks,
                   start = Sys.Date()-5*365,
                   end = Sys.Date(),
                   freq = "daily",
                   thres = 0.5)
-        
+
         if(is.character(data)){
           showNotification(paste0(data))
           removeModal()
         }else{
-        data <- data[["df.tickers"]] %>% 
+        data <- data[["df.tickers"]] %>%
             select(price.close,ref.date)
-        
+
         # Calculating moving averages
-        data$ma50 <- stats::filter(data$price.close,rep(1/50,50),sides=1)  
-        data$ma200 <- stats::filter(data$price.close,rep(1/200,200),sides=1)  
-        
+        data$ma50 <- stats::filter(data$price.close,rep(1/50,50),sides=1)
+        data$ma200 <- stats::filter(data$price.close,rep(1/200,200),sides=1)
+
         # Update date range slider
         updateSliderInput(session, inputId = "daterange",
                           min = min(data$ref.date),
                           value = min(data$ref.date))
-            
+
         removeModal()
-        
-        output$stocksplot <- renderGirafe({    
+
+        output$stocksplot <- renderGirafe({
         p <- ggplot(data[data$ref.date>=input$daterange,], aes(x=ref.date,y=price.close)) +
           geom_line(color="white", alpha=.6) +
           geom_point_interactive(fill="white", color="white", alpha=.8,size = .75,
@@ -609,7 +609,7 @@ server <- function(input, output, session) {
           xlab("") +
           ylab("Closing price") +
             theme_minimal(base_family = "sans") +
-            theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) + 
+            theme(panel.background = element_rect(fill = "#343e48",color = "#d3d3d3")) +
             theme(panel.grid.major.y = element_line(color="#d3d3d3", size = .1)) +
             theme(panel.grid.major.x = element_line(color="#d3d3d3", size = .1)) +
             theme(panel.grid.minor.x = element_blank()) +
@@ -618,7 +618,7 @@ server <- function(input, output, session) {
             theme(axis.text = element_text(colour = "#d3d3d3", size = 9)) +
             theme(axis.title = element_text(color = "#d3d3d3", size = 9)) +
             theme(plot.caption = element_text(color="#d3d3d3"))
-     
+
      girafe(ggobj = p, width_svg = 7, height_svg = 4,
                   fonts=list(sans = "Arial"),
                   options = list(
@@ -628,7 +628,7 @@ server <- function(input, output, session) {
         })
       }}}
       })
-    
+
     # rwf(y, h, drift=TRUE)
 }
 
